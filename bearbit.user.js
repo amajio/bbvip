@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BearBit Tweak
 // @namespace    http://tampermonkey.net/
-// @version      0.3.1
+// @version      0.3.2
 // @description  BearBit Tweak
 // @author       You
 // @match       https://bearbit.org/viewno18sbx.php*
@@ -395,57 +395,110 @@
             const link = row.querySelector('td[width="900"] a[href^="details.php"]');
             if (!link) return;
 
-            // Check if button already processed
             const vipButton = row.querySelector('[class^="vip-download-locked"]');
             if (!vipButton || vipButton.dataset.processed === 'true') return;
 
+            vipButton.removeAttribute('href');
+
             const targetUrl = `${baseUrl}${link.getAttribute('href')}`;
+            vipButton.dataset.targetUrl = targetUrl;
+            vipButton.dataset.processed = 'true';
 
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: targetUrl,
-                timeout: 10000, // Add timeout
-                onload: function(response) {
-                    if (response.status !== 200) {
-                        console.error(`Failed to load ${targetUrl}: ${response.status}`);
-                        return;
-                    }
+            const fileSizeSpan = vipButton.querySelector('span');
 
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(response.responseText, "text/html");
-                    const downloadBtn = doc.querySelector('a[class^="bb-dl-btn"]');
+            vipButton.style.cursor = 'pointer';
+            vipButton.style.display = 'inline-block';
+            vipButton.innerHTML = '📥 ดาวน์โหลด ';
+            if (fileSizeSpan) {
+                vipButton.appendChild(fileSizeSpan.cloneNode(true));
+            }
+            vipButton.title = 'คลิกเพื่อดาวน์โหลด';
+            vipButton.style.cursor = 'pointer';
 
-                    if (downloadBtn) {
-                        const downloadUrl = downloadBtn.getAttribute('href');
-                        // Handle both absolute and relative URLs
-                        const fullDownloadUrl = downloadUrl.startsWith('http')
-                        ? downloadUrl
-                        : `${baseUrl}${downloadUrl}`;
+            vipButton.removeEventListener('click', vipButton.clickHandler);
 
-                        const fileSizeSpan = vipButton.querySelector('span');
-                        const originalText = vipButton.textContent;
+            vipButton.clickHandler = function(event) {
+                event.preventDefault();
+                event.stopPropagation();
 
-                        // Clear and rebuild button
-                        vipButton.innerHTML = '';
-                        vipButton.appendChild(document.createTextNode('📥 ดาวน์โหลด '));
-                        if (fileSizeSpan) {
-                            vipButton.appendChild(fileSizeSpan.cloneNode(true));
-                        }
-                        vipButton.href = fullDownloadUrl;
-                        vipButton.title = 'คลิกเพื่อดาวน์โหลด';
-                        vipButton.dataset.processed = 'true'; // Mark as processed
-                        vipButton.style.cursor = 'pointer';
-                    } else {
-                        console.log(`Download button not found for: ${targetUrl}`);
-                    }
-                },
-                onerror: function(error) {
-                    console.error(`Request failed for ${targetUrl}:`, error);
-                },
-                ontimeout: function() {
-                    console.warn(`Request timeout for ${targetUrl}`);
+                if (this.dataset.loading === 'true') return;
+
+                const storedUrl = this.dataset.targetUrl;
+                if (!storedUrl) {
+                    console.error('No target URL found');
+                    return;
                 }
-            });
+
+                this.dataset.loading = 'true';
+
+                const currentHTML = this.innerHTML;
+
+                this.innerHTML = '⏳ กำลังโหลด...';
+                this.style.cursor = 'wait';
+
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: storedUrl,
+                    timeout: 10000,
+                    onload: (response) => {
+                        if (response.status !== 200) {
+                            console.error(`Failed to load ${storedUrl}: ${response.status}`);
+                            this.innerHTML = '❌ ล้มเหลว';
+                            this.style.cursor = 'pointer';
+                            setTimeout(() => {
+                                this.innerHTML = currentHTML;
+                                this.dataset.loading = 'false';
+                            }, 2000);
+                            return;
+                        }
+
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(response.responseText, "text/html");
+                        const downloadBtn = doc.querySelector('a[class^="bb-dl-btn"]');
+
+                        if (downloadBtn) {
+                            let downloadUrl = downloadBtn.getAttribute('href');
+                            const fullDownloadUrl = downloadUrl.startsWith('http')
+                            ? downloadUrl
+                            : `${baseUrl}${downloadUrl}`;
+
+                            this.href = fullDownloadUrl;
+                            this.dataset.loading = 'false';
+
+                            window.location.href = fullDownloadUrl;
+                            this.innerHTML = currentHTML;
+                        } else {
+                            console.log(`Download button not found for: ${storedUrl}`);
+                            this.innerHTML = '❌ ไม่พบลิงก์';
+                            this.style.cursor = 'pointer';
+                            setTimeout(() => {
+                                this.innerHTML = currentHTML;
+                                this.dataset.loading = 'false';
+                            }, 2000);
+                        }
+                    },
+                    onerror: (error) => {
+                        console.error(`Request failed for ${storedUrl}:`, error);
+                        this.innerHTML = '❌ เครือข่ายผิดพลาด';
+                        this.style.cursor = 'pointer';
+                        setTimeout(() => {
+                            this.innerHTML = currentHTML;
+                            this.dataset.loading = 'false';
+                        }, 2000);
+                    },
+                    ontimeout: () => {
+                        console.warn(`Request timeout for ${storedUrl}`);
+                        this.innerHTML = '⏰ เวลาหมด';
+                        this.style.cursor = 'pointer';
+                        setTimeout(() => {
+                            this.innerHTML = currentHTML;
+                            this.dataset.loading = 'false';
+                        }, 2000);
+                    }
+                });
+            };
+
+            vipButton.addEventListener('click', vipButton.clickHandler);
         });
     }
 
