@@ -472,7 +472,6 @@
                             ? downloadUrl
                             : `${baseUrl}${downloadUrl}`;
 
-                            this.href = fullDownloadUrl;
                             this.dataset.loading = 'false';
                             window.location.href = fullDownloadUrl;
                             this.innerHTML = currentState.html;
