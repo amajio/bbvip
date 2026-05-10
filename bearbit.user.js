@@ -395,7 +395,7 @@
             const row = posterTd.closest('tr');
             if (!row) return;
 
-            const link = row.querySelector('td[width="900"] a[href^="details.php"]');
+            const link = row.querySelector('a[href^="details.php"]');
             if (!link) return;
 
             const vipButton = row.querySelector('[class^="vip-download-locked"]');
