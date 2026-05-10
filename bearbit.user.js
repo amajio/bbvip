@@ -239,20 +239,6 @@
      }
 `);
 
-    function setTableRow(){
-        const stickyTable = document.querySelectorAll('table')[6]
-        const mainTable = document.querySelectorAll('table')[7]
-        if(stickyTable) stickyTable.className = 'mainTable';
-         if(mainTable) mainTable.className = 'mainTable';
-        const allTables = document.querySelectorAll('.mainTable tr');
-        allTables.forEach(row => {
-            const colhead = row.querySelector('td.colhead');
-            if(colhead) return;
-            row.style.cssText += `height: auto !important`;
-            row.style.cssText += 'max-height: 500px !important;';
-        });
-    }
-
     function createSettingsPanel() {
         // Remove existing panel if any
         const existingPanel = document.getElementById('bearbit-settings-panel');
@@ -312,7 +298,6 @@
             }
         });
 
-        // Show/hide custom input based on initial selection
         if (sizeSelect.value === 'custom') {
             customInput.style.display = 'block';
         }
@@ -326,7 +311,10 @@
         const overlay = document.querySelector('.bearbit-settings-overlay');
         const toggle = document.querySelector('.bearbit-settings-toggle');
 
-        if (panel) panel.remove();
+        if (panel) {
+            panel.querySelector('.bearbit-settings-close')?.removeEventListener('click', hideSettingsPanel);
+            panel.remove();
+        }
         if (overlay) overlay.remove();
         if (toggle) toggle.style.display = 'block';
     }
@@ -388,7 +376,18 @@
         document.body.appendChild(button);
     }
 
+    function cleanupButtons() {
+        document.querySelectorAll('[data-processed="true"]').forEach(btn => {
+            if (btn.clickHandler) {
+                btn.removeEventListener('click', btn.clickHandler);
+                delete btn.clickHandler;
+            }
+            delete btn.dataset.processed;
+        });
+    }
+
     function DownloadButton() {
+        cleanupButtons();
         const posterRows = document.querySelectorAll('tr td[class="poster-column"]');
         const baseUrl = "https://bearbit.org/";
 
@@ -481,7 +480,6 @@
                             this.innerHTML = currentState.html;
                             this.style.cursor = currentState.cursor;
                         } else {
-                            console.log(`Download button not found for: ${storedUrl}`);
                             this.innerHTML = '❌ ไม่พบลิงก์';
                             this.style.cursor = 'pointer';
                             setTimeout(() => {
@@ -519,20 +517,26 @@
     }
 
     function autoThank() {
-        if (window.location.pathname.includes('details.php')) {
-            const sayThanksTd = document.getElementById('saythanks');
-            if (sayThanksTd) {
-                const img = sayThanksTd.querySelector('img[src*="pic/thanks/th"]');
-                if (img) {
-                    const anchor = sayThanksTd.querySelector('a');
-                    if (anchor) {
-                        anchor.click();
+        let attempts = 0;
+        const maxAttempts = 5;
+        function tryThank() {
+            if (attempts++ >= maxAttempts) return;
+            if (window.location.pathname.includes('details.php')) {
+                const sayThanksTd = document.getElementById('saythanks');
+                if (sayThanksTd) {
+                    const img = sayThanksTd.querySelector('img[src*="pic/thanks/th"]');
+                    if (img) {
+                        const anchor = sayThanksTd.querySelector('a');
+                        if (anchor) {
+                            anchor.click();
+                        }
+                    } else {
+                        setTimeout(autoThank, 500);
                     }
-                } else {
-                    setTimeout(autoThank, 500);
                 }
             }
         }
+        tryThank();
     }
 
     function hideGayContents() {
@@ -561,7 +565,6 @@
         if (!toggleBtn) return true;
 
         const btnText = toggleBtn.innerText || toggleBtn.textContent || '';
-        console.log('Button text:', btnText);
 
         return btnText.includes('แสดงรูปภาพ');
     }
@@ -592,6 +595,13 @@
         return container;
     }
 
+    window.addEventListener('beforeunload', () => {
+        if (previewContainer) {
+            previewContainer.remove();
+            previewContainer = null;
+        }
+    });
+
     function centerPreview(container) {
         if (!container) return;
         container.style.left = '50%';
@@ -600,7 +610,6 @@
     }
 
     function showPreview(imageUrl) {
-        console.log('Loading image:', imageUrl);
 
         if (!previewContainer) {
             previewContainer = createPreviewContainer();
@@ -622,7 +631,6 @@
         const testImg = new Image();
 
         testImg.onload = function() {
-            console.log('Image loaded successfully:', imageUrl);
             img.src = imageUrl;
             img.style.opacity = '1';
         };
@@ -670,7 +678,6 @@
 
     document.addEventListener('mouseover', function(event) {
         if (!checkIfImagesVisible()) {
-            console.log('Images are hidden (button shows "แสดงรูปภาพ"), preview disabled');
             return;
         }
 
@@ -682,8 +689,6 @@
 
         const imageUrl = target.href;
         if (!imageUrl) return;
-
-        console.log('Found ดูรูป link with href:', imageUrl);
 
         if (hideTimeout) {
             clearTimeout(hideTimeout);
