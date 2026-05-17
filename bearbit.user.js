@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         BearBit Tweak
+// @name         BearBit Tweak [17-5-26]
 // @namespace    http://tampermonkey.net/
-// @version      0.3.4
+// @version      17.5.26
 // @description  BearBit Tweak
 // @author       You
 // @match       https://bearbit.org/viewno18sbx.php*
@@ -22,16 +22,23 @@
     let previewContainer = null;
     let currentLink = null;
     let hideTimeout = null;
+    let isHovering = false;
+
+    const previewClass = '.bb-preview';
+    const vipDivClass = '.bb-file-actions';
+    const bookmarkClass = '.bookmark-btn';
 
     // Default settings
     const defaultSettings = {
         HIDE_GAY: true,
+        MINIMAL: false,
         THUMBNAIL_SIZE: "100px"
     };
 
     // Load settings from storage or use defaults
     const settings = {
         HIDE_GAY: GM_getValue('HIDE_GAY', defaultSettings.HIDE_GAY),
+        MINIMAL: GM_getValue('MINIMAL', defaultSettings.MINIMAL),
         THUMBNAIL_SIZE: GM_getValue('THUMBNAIL_SIZE', defaultSettings.THUMBNAIL_SIZE)
     };
 
@@ -147,21 +154,6 @@
          margin-top: 5px !important;
      }
 
-     .bearbit-settings-input {
-         width: 100% !important;
-         padding: 8px !important;
-         border: 1px solid #444 !important;
-         border-radius: 4px !important;
-         background: #333 !important;
-         color: white !important;
-         margin-top: 5px !important;
-         display: none;
-     }
-
-     .bearbit-settings-input::placeholder {
-         color: #999 !important;
-     }
-
      .bearbit-settings-buttons {
          display: flex !important;
          justify-content: space-between !important;
@@ -237,6 +229,53 @@
          color: white !important;
          font-weight: normal !important;
      }
+
+
+     /* Style bearbit actions button */
+     .bb-actions {
+        margin-top: 8px;
+        margin-bottom: 5px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .bb-actions a {
+        font-family: Tahoma, Arial, sans-serif;
+        font-size: 11px;
+        font-weight: bold;
+        text-decoration: none;
+        border-radius: 16px;
+        padding: 5px 11px;
+        line-height: 1.2;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid transparent;
+        box-shadow: rgba(15, 23, 42, 0.12) 0px 1px 4px;
+    }
+
+    .bb-preview {
+        background: #ffffff;
+        border-color: rgb(203, 213, 225) !important;
+    }
+
+    .bb-bookmark {
+        background: none !important;
+        color: rgb(157, 171, 190);
+        border: 0px !important;
+        box-shadow: none !important;
+        padding: 3px 5px !important;
+        font-size: 20px !important;
+    }
+
+    .bb-bookmark.bookmarked {
+	    color: rgb(245, 162, 20);
+    }
+
+}
+
 `);
 
     function createSettingsPanel() {
@@ -256,7 +295,7 @@
 
         panel.innerHTML = `
             <div class="bearbit-settings-header">
-                <div class="bearbit-settings-title">BearBit Settings</div>
+                <div class="bearbit-settings-title">BearBit Tweak Settings</div>
                 <button class="bearbit-settings-close">&times;</button>
             </div>
             <div class="bearbit-settings-group">
@@ -264,16 +303,18 @@
                     <input type="checkbox" class="bearbit-settings-checkbox" id="hide-gay" ${settings.HIDE_GAY ? 'checked' : ''}>
                     ซ่อนหมวดสีรุ้ง
                 </label>
+                <label class="bearbit-settings-label">
+                <input type="checkbox" class="bearbit-settings-checkbox" id="minimal" ${settings.MINIMAL ? 'checked' : ''}>
+                    Minimal details
+                </label>
             </div>
             <div class="bearbit-settings-group">
                 <label style="color: white !important;">ขนาดรูป:</label>
                 <select class="bearbit-settings-select" id="thumbnail-size-select">
-                    <option value="60px" ${settings.THUMBNAIL_SIZE === '60px' ? 'selected' : ''}>เล็ก (60px)</option>
-                    <option value="100px" ${settings.THUMBNAIL_SIZE === '100px' ? 'selected' : ''}>ปกติ (100px)</option>
-                    <option value="150px" ${settings.THUMBNAIL_SIZE === '150px' ? 'selected' : ''}>ใหญ่ (150px)</option>
-                    <option value="custom" ${!['60px', '100px', '150px'].includes(settings.THUMBNAIL_SIZE) ? 'selected' : ''}>กำหนดเอง</option>
+                    <option value="50px" ${settings.THUMBNAIL_SIZE === '50px' ? 'selected' : ''}>เล็ก</option>
+                    <option value="100px" ${settings.THUMBNAIL_SIZE === '100px' ? 'selected' : ''}>ปกติ</option>
+                    <option value="150px" ${settings.THUMBNAIL_SIZE === '150px' ? 'selected' : ''}>ใหญ่</option>
                 </select>
-                <input type="text" class="bearbit-settings-input" id="thumbnail-size-custom" value="${!['60px', '100px', '150px'].includes(settings.THUMBNAIL_SIZE) ? settings.THUMBNAIL_SIZE : ''}" placeholder="ตัวอย่าง 120px (มี px ตามหลังด้วย)">
             </div>
             <div class="bearbit-settings-buttons">
                 <button class="bearbit-settings-btn bearbit-settings-reset">คืนค่าเริ่มต้น</button>
@@ -288,19 +329,6 @@
 
         // Handle dropdown change
         const sizeSelect = panel.querySelector('#thumbnail-size-select');
-        const customInput = panel.querySelector('#thumbnail-size-custom');
-
-        sizeSelect.addEventListener('change', function() {
-            if (this.value === 'custom') {
-                customInput.style.display = 'block';
-            } else {
-                customInput.style.display = 'none';
-            }
-        });
-
-        if (sizeSelect.value === 'custom') {
-            customInput.style.display = 'block';
-        }
 
         document.body.appendChild(overlay);
         document.body.appendChild(panel);
@@ -321,29 +349,22 @@
 
     function saveSettings() {
         const sizeSelect = document.getElementById('thumbnail-size-select');
-        const customInput = document.getElementById('thumbnail-size-custom');
-
-        let thumbnailSize;
-        if (sizeSelect.value === 'custom') {
-            thumbnailSize = customInput.value.trim();
-            // Validate custom input
-            if (!thumbnailSize || !thumbnailSize.match(/^\d+px$/)) {
-                alert('กรุณากรอกขนาดรูปในรูปแบบที่ถูกต้อง ตัวอย่าง 120px (มี px ตามหลังด้วย)');
-                return;
-            }
-        } else {
-            thumbnailSize = sizeSelect.value;
+        let thumbsize = 0;
+        if(document.getElementById('minimal').checked){
+                thumbsize = '50px';
+        }else{
+                thumbsize = sizeSelect.value;
         }
-
         const newSettings = {
             HIDE_GAY: document.getElementById('hide-gay').checked,
-            THUMBNAIL_SIZE: thumbnailSize
+            MINIMAL: document.getElementById('minimal').checked,
+            THUMBNAIL_SIZE: thumbsize
         };
 
         // Save to storage
         GM_setValue('HIDE_GAY', newSettings.HIDE_GAY);
+        GM_setValue('MINIMAL', newSettings.MINIMAL);
         GM_setValue('THUMBNAIL_SIZE', newSettings.THUMBNAIL_SIZE);
-
         // Update current settings
         Object.assign(settings, newSettings);
 
@@ -355,6 +376,7 @@
     function resetSettings() {
         if (confirm('Reset all settings to defaults?')) {
             GM_setValue('HIDE_GAY', defaultSettings.HIDE_GAY);
+            GM_setValue('MINIMAL', defaultSettings.MINIMAL);
             GM_setValue('THUMBNAIL_SIZE', defaultSettings.THUMBNAIL_SIZE);
 
             Object.assign(settings, defaultSettings);
@@ -386,6 +408,123 @@
         });
     }
 
+    function hidePhotoButton(){
+        const checkForButton = setInterval(() => {
+            const button = document.getElementById('toggle-posters-btn');
+            if(button){
+                if (button.textContent == "ซ่อนรูปภาพ" && settings.MINIMAL) {
+                    clearInterval(checkForButton);
+                    button.dispatchEvent(new Event('click', { bubbles: true }));
+                    button.style.display = 'none';
+                }else if(!settings.MINIMAL){
+                    button.style.display = 'block';
+                }
+            }
+        }, 100);
+    }
+
+    function removeHotTorrentSection() {
+        const firstH2 = document.querySelector('h2');
+        const hr = document.querySelector('hr');
+
+        if (firstH2 && hr) {
+            let current = firstH2.nextSibling;
+            const elementsToRemove = [];
+
+            // Collect elements to remove (skip style and script tags)
+            while (current && current !== hr) {
+                if (current.nodeType === Node.ELEMENT_NODE) {
+                    // Keep style and script tags, remove everything else
+                    if (current.tagName !== 'STYLE' && current.tagName !== 'SCRIPT') {
+                        elementsToRemove.push(current);
+                    }
+                } else if (current.nodeType === Node.TEXT_NODE && current.textContent.trim() !== '') {
+                    // Remove non-empty text nodes
+                    elementsToRemove.push(current);
+                }
+                current = current.nextSibling;
+            }
+
+            // Remove the collected elements
+            elementsToRemove.forEach(element => {element.style.display = 'none';});
+
+            // Remove the hr itself
+            hr.style.display = 'none';
+            firstH2.style.display = 'none';
+        }
+    }
+
+    function removeColumns(row){
+        const column_number = [13,10,7,6];
+        column_number.forEach(col => {
+            let el = row.querySelector(`td:nth-child(${col})`);
+            if (el) el.remove();
+        });
+    }
+
+    function removeUploaderAvartar(row){
+        const uploader = row.querySelector('td:nth-child(13)');
+        if (uploader) {
+            // Remove img elements
+            uploader.querySelectorAll('img').forEach(img => img.remove());
+
+            // Remove other image types
+            uploader.querySelectorAll('picture, svg, [role="img"]').forEach(el => el.remove());
+
+            // Clear background images
+            uploader.querySelectorAll('*').forEach(el => {
+                if (window.getComputedStyle(el).backgroundImage !== 'none') {
+                    el.style.backgroundImage = 'none';
+                }
+            });
+        }
+    }
+
+    function minimalDetails(){
+        removeHotTorrentSection();
+        const posterRows = document.querySelectorAll('tr td[class="poster-column"]');
+        posterRows.forEach(posterTd => {
+            const row = posterTd.closest('tr');
+            if (!row) return;
+            removeColumns(row);
+            const br = row.querySelector('br');
+            if(br){
+                let nextDiv = br.nextElementSibling;
+                while (nextDiv && nextDiv.tagName !== 'DIV') {
+                    nextDiv = nextDiv.nextElementSibling;
+                }
+                if (nextDiv) {
+                    let current = br;
+                    let nextNode;
+                    while (current && current !== nextDiv) {
+                        nextNode = current.nextSibling;
+                        current.remove();
+                        current = nextNode;
+                    }
+                } else {
+                    // Fallback: just remove until the start of the div area
+                    let elem = br;
+                    while (elem && elem.nextSibling && elem.nextSibling.tagName !== 'DIV') {
+                        elem = elem.nextSibling;
+                        elem.remove();
+                    }
+                    if (elem && elem.nextSibling && elem.nextSibling.tagName === 'DIV') {
+                        // Everything is removed already, br is gone too
+                    }
+                }
+            }
+        });
+        const headers = document.querySelectorAll('.colhead'); // remove header column
+        for (const col of headers) {
+            const h = col.querySelector('a[href^="view"][href$=".php?sortby=1"]');
+            if(h){
+                const row = h.closest('tr');
+                col.style.width = '100%';
+                removeColumns(row);
+            }
+        }
+    }
+
     function DownloadButton() {
         cleanupButtons();
         const posterRows = document.querySelectorAll('tr td[class="poster-column"]');
@@ -398,34 +537,110 @@
             const link = row.querySelector('a[href^="details.php"]');
             if (!link) return;
 
-            const vipButton = row.querySelector('[class^="vip-download-locked"]');
-            if (!vipButton || vipButton.dataset.processed === 'true') return;
+            const sizeCell = row.querySelector('td:nth-child(9)');
+            let fileSize = ' - '
+            let numericSize = 0;
+            let sizeUnit = '';
 
-            vipButton.removeAttribute('href');
+            if (sizeCell) {
+                const sizeText = sizeCell.innerText.trim();
+                const match = sizeText.match(/^([\d.]+)\s+(TB|GB|MB|KB)$/i);
+                if (match) {
+                    fileSize = sizeText;
+                    numericSize = parseFloat(match[1]);
+                    sizeUnit = match[2].toUpperCase();
+
+                    // Convert to GB for comparison
+                    if (sizeUnit === 'TB') {
+                        numericSize = numericSize * 1024; // 1 TB = 1024 GB
+                    } else if (sizeUnit === 'MB') {
+                        numericSize = numericSize / 1024;
+                    } else if (sizeUnit === 'KB') {
+                        numericSize = numericSize / (1024 * 1024);
+                    }
+                }
+            }
+
+            row.querySelector(`${vipDivClass}`)?.style.setProperty('display', 'none');
+            row.querySelector('img[src="pic/cams.gif "]')?.style.setProperty('display', 'none');
+            const originalBookmark = row.querySelector(`${bookmarkClass}`);
+            const divGroup = document.createElement('div');
+            divGroup.className = 'bb-actions';
+            const nameCell = row.querySelector('td:nth-child(3)');
+
+            const filename_div = document.createElement('div');
+            filename_div.className = 'hover-area';
+            filename_div.style.display = 'inline-block';
+            link.parentNode.insertBefore(filename_div, link);
+            filename_div.appendChild(link);
+
+            const btnDownload = document.createElement('a');
+            btnDownload.textContent = `📥 ดาวน์โหลด (${fileSize})`;
+            btnDownload.style.color = '#ffffff';
+            btnDownload.style.cursor = 'pointer';
+            btnDownload.title = 'คลิกเพื่อดาวน์โหลด';
+
+            const btnImage = document.createElement('a');
+            const camsImg = row.querySelector('img[src="pic/cams.gif "]')?.closest('a').href;
+            btnImage.textContent = `📷 รูป`;
+            btnImage.style.cursor = 'pointer';
+            btnImage.className = 'bb-preview';
+            btnImage.href = camsImg;
+            btnImage.target = '_blank';
+            btnImage.title = 'ดูรูปตัวอย่าง';
+
+            const btnBookmark = document.createElement('a');
+            btnBookmark.textContent = `★`;
+            btnBookmark.className = 'bb-bookmark';
+            btnBookmark.style.cursor = 'pointer';
+            btnBookmark.title = 'เพิ่ม/ลบ ออกจากบุ๊กมาร์ก';
+
+
+            // Set background color based on file size (in GB)
+            let bgColor, suffixClass;
+            if (numericSize < 4) {
+                bgColor = '#16A34A'; // Green
+                suffixClass = 'small';
+            } else if (numericSize >= 4 && numericSize <= 10 ) {
+                bgColor = '#2563EB'; // blue
+                suffixClass = 'medium';
+            } else if (numericSize > 10 && numericSize <= 30) {
+                bgColor = '#EA580C'; // Orange
+                suffixClass = 'large';
+            } else if (numericSize > 30) {
+                bgColor = '#DC2626'; // Red
+                suffixClass = 'xlarge';
+            } else {
+                bgColor = '#16A34A'; // Grey (for unknown size)
+                suffixClass = 'small';
+            }
+
+            btnDownload.style.backgroundColor = bgColor;
+            divGroup.appendChild(btnImage);
+            divGroup.appendChild(btnDownload);
+            divGroup.appendChild(btnBookmark);
+            nameCell.appendChild(divGroup);
+
+            removeUploaderAvartar(row);
+
+            if (!btnDownload || btnDownload.dataset.processed === 'true') return;
 
             const targetUrl = `${baseUrl}${link.getAttribute('href')}`;
-            vipButton.dataset.targetUrl = targetUrl;
-            vipButton.dataset.processed = 'true';
+            btnDownload.dataset.targetUrl = targetUrl;
+            btnDownload.dataset.processed = 'true';
 
-            const fileSizeSpan = vipButton.querySelector('span');
+            btnDownload.removeEventListener('click', btnDownload.clickHandler);
 
-            // Store original state
-            const originalState = {
-                html: vipButton.innerHTML,
-                cursor: vipButton.style.cursor
-            };
+            btnBookmark.addEventListener('click', () => {
+                originalBookmark.click();
+                if (originalBookmark.classList.contains('bookmarked')) {
+                    btnBookmark.classList.add('bookmarked');
+                }else{
+                    btnBookmark.classList.remove('bookmarked');
+                }
+            });
 
-            vipButton.style.cursor = 'pointer';
-            vipButton.style.display = 'inline-block';
-            vipButton.innerHTML = '📥 ดาวน์โหลด ';
-            if (fileSizeSpan) {
-                vipButton.appendChild(fileSizeSpan.cloneNode(true));
-            }
-            vipButton.title = 'คลิกเพื่อดาวน์โหลด';
-
-            vipButton.removeEventListener('click', vipButton.clickHandler);
-
-            vipButton.clickHandler = function(event) {
+            btnDownload.clickHandler = function(event) {
                 event.preventDefault();
                 event.stopPropagation();
 
@@ -467,10 +682,10 @@
 
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(response.responseText, "text/html");
-                        const downloadBtn = doc.querySelector('a[class^="bb-dl-btn"]');
+                        const downloadBtn = doc.querySelector('a[href^="downloadnew.php"]');
 
                         if (downloadBtn) {
-                            let downloadUrl = downloadBtn.getAttribute('href');
+                            let downloadUrl = downloadBtn.href
                             const fullDownloadUrl = downloadUrl.startsWith('http')
                             ? downloadUrl
                             : `${baseUrl}${downloadUrl}`;
@@ -512,7 +727,7 @@
                 });
             };
 
-            vipButton.addEventListener('click', vipButton.clickHandler);
+            btnDownload.addEventListener('click', btnDownload.clickHandler);
         });
     }
 
@@ -560,13 +775,59 @@
             });
     }
 
-    function checkIfImagesVisible() {
-        const toggleBtn = document.getElementById('toggle-posters-btn');
-        if (!toggleBtn) return true;
+    function setupHoverDetection() {
+        const allDetailsLinks = document.querySelectorAll('a[href^="details.php"]');
 
-        const btnText = toggleBtn.innerText || toggleBtn.textContent || '';
+        allDetailsLinks.forEach(link => {
+            let currentRow = link.closest('tr');
+            const camsImg = currentRow.querySelector(`${previewClass}`);
+            const fileArea = currentRow.querySelector('.hover-area');
 
-        return btnText.includes('แสดงรูปภาพ');
+            if (!fileArea) return;
+
+            // Remove old listeners to avoid duplicates
+            fileArea.removeEventListener('mouseenter', handleMouseEnter);
+            fileArea.removeEventListener('mouseleave', handleMouseLeave);
+
+            // Store the image URL with the element
+            if (camsImg) {
+                fileArea.dataset.previewUrl = camsImg.getAttribute('href');
+            }
+
+            // Add new listeners
+            fileArea.addEventListener('mouseenter', handleMouseEnter);
+            fileArea.addEventListener('mouseleave', handleMouseLeave);
+        });
+    }
+
+    function handleMouseEnter(event) {
+        const fileArea = event.currentTarget;
+        const imageUrl = fileArea.dataset.previewUrl;
+
+        if (imageUrl && !isHovering) {
+            // Clear any pending hide timeout
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+
+            isHovering = true;
+            currentLink = fileArea;
+            showPreview(imageUrl);
+            fileArea.style.backgroundColor = '#f0f0f0';
+        }
+    }
+
+    function handleMouseLeave(event) {
+        const fileArea = event.currentTarget;
+
+        // Delay hiding to prevent flickering
+        hideTimeout = setTimeout(() => {
+            fileArea.style.backgroundColor = '';
+            hidePreview();
+            isHovering = false;
+            currentLink = null;
+        }, 100);
     }
 
     function createPreviewContainer() {
@@ -579,28 +840,23 @@
         container.style.padding = '3px';
         container.style.display = 'none';
         container.style.pointerEvents = 'none';
+        container.style.border = "1px solid #fff";
+        container.style.maxWidth = '70vh';
+        container.style.maxHeight = '90vh';
+        container.style.height = '85vh';
 
         const img = document.createElement('img');
-        img.style.maxHeight = '90vh';
-        img.style.maxWidth = '50vw';
-        img.style.width = 'auto';
-        img.style.height = 'auto';
+        img.style.width = '100%';
+        img.style.height = '100%';
         img.style.objectFit = 'contain';
         img.style.display = 'block';
-        img.style.borderRadius = '8px';
+        img.style.borderRadius = '12px';
 
         container.appendChild(img);
         document.body.appendChild(container);
 
         return container;
     }
-
-    window.addEventListener('beforeunload', () => {
-        if (previewContainer) {
-            previewContainer.remove();
-            previewContainer = null;
-        }
-    });
 
     function centerPreview(container) {
         if (!container) return;
@@ -610,23 +866,24 @@
     }
 
     function showPreview(imageUrl) {
-
         if (!previewContainer) {
             previewContainer = createPreviewContainer();
         }
 
         const img = previewContainer.querySelector('img');
 
+        // Clear previous error message
+        const oldError = previewContainer.querySelector('.error-msg');
+        if (oldError) oldError.remove();
+
         img.src = '';
         img.alt = 'Loading...';
+        img.style.opacity = '0.5';
 
         previewContainer.style.display = 'flex';
         previewContainer.style.alignItems = 'center';
         previewContainer.style.justifyContent = 'center';
         centerPreview(previewContainer);
-
-        // Show loading state
-        img.style.opacity = '0.5';
 
         const testImg = new Image();
 
@@ -645,10 +902,6 @@
             errorDiv.style.padding = '20px';
             errorDiv.style.textAlign = 'center';
             errorDiv.innerText = 'Failed to load image';
-
-            const oldError = previewContainer.querySelector('.error-msg');
-            if (oldError) oldError.remove();
-
             errorDiv.className = 'error-msg';
             previewContainer.appendChild(errorDiv);
         };
@@ -658,56 +911,24 @@
     }
 
     function hidePreview() {
-        if (previewContainer) {
+        if (previewContainer && previewContainer.style.display !== 'none') {
             previewContainer.style.display = 'none';
             const img = previewContainer.querySelector('img');
             if (img) {
                 img.src = '';
                 img.style.opacity = '1';
             }
-            // Remove error message if exists
             const errorDiv = previewContainer.querySelector('.error-msg');
             if (errorDiv) errorDiv.remove();
         }
-        if (hideTimeout) {
-            clearTimeout(hideTimeout);
-            hideTimeout = null;
-        }
-        currentLink = null;
     }
 
-    document.addEventListener('mouseover', function(event) {
-        if (!checkIfImagesVisible()) {
-            return;
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        if (previewContainer) {
+            previewContainer.remove();
+            previewContainer = null;
         }
-
-        let target = event.target.closest('a');
-        if (!target) return;
-
-        const linkText = (target.innerText || target.textContent || '');
-        if (!linkText.includes('ดูรูป') && !linkText.includes('📷')) return;
-
-        const imageUrl = target.href;
-        if (!imageUrl) return;
-
-        if (hideTimeout) {
-            clearTimeout(hideTimeout);
-            hideTimeout = null;
-        }
-
-        currentLink = target;
-        showPreview(imageUrl);
-    });
-
-    document.addEventListener('mouseout', function(event) {
-        let target = event.target.closest('a');
-        if (target && target === currentLink) {
-            hidePreview();
-        }
-    });
-
-    document.addEventListener('mouseleave', function() {
-        hidePreview();
     });
 
     window.addEventListener('resize', function() {
@@ -716,23 +937,30 @@
         }
     });
 
+    // Handle clicks that might interfere
     document.addEventListener('click', function(event) {
         const toggleBtn = event.target.closest('#toggle-posters-btn');
         if (toggleBtn) {
             setTimeout(() => {
-                if (!checkIfImagesVisible()) {
-                    hidePreview();
+                hidePreview();
+                isHovering = false;
+                if (currentLink) {
+                    currentLink.style.backgroundColor = '';
+                    currentLink = null;
                 }
             }, 50);
         }
     });
 
-
     function init() {
         DownloadButton();
+        if(settings.MINIMAL){
+            minimalDetails();
+        }
         autoThank();
         hideGayContents();
         createSettingsButton();
+        setupHoverDetection();
     }
 
     if (document.readyState === 'loading') {
