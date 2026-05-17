@@ -454,11 +454,11 @@
         }
     }
 
-    function removeColumns(row){
+    function hideColumns(row){
         const column_number = [13,10,7,6];
         column_number.forEach(col => {
             let el = row.querySelector(`td:nth-child(${col})`);
-            if (el) el.remove();
+            if (el) el.style.display = 'none';
         });
     }
 
@@ -481,12 +481,13 @@
     }
 
     function minimalDetails(){
+        if(!settings.MINIMAL) return;
         removeHotTorrentSection();
         const posterRows = document.querySelectorAll('tr td[class="poster-column"]');
         posterRows.forEach(posterTd => {
             const row = posterTd.closest('tr');
             if (!row) return;
-            removeColumns(row);
+            hideColumns(row);
             const br = row.querySelector('br');
             if(br){
                 let nextDiv = br.nextElementSibling;
@@ -514,18 +515,18 @@
                 }
             }
         });
-        const headers = document.querySelectorAll('.colhead'); // remove header column
+        const headers = document.querySelectorAll('.colhead'); // hide header column
         for (const col of headers) {
             const h = col.querySelector('a[href^="view"][href$=".php?sortby=1"]');
             if(h){
                 const row = h.closest('tr');
                 col.style.width = '100%';
-                removeColumns(row);
+                hideColumns(row);
             }
         }
     }
 
-    function DownloadButton() {
+    function actionsButton() {
         cleanupButtons();
         const posterRows = document.querySelectorAll('tr td[class="poster-column"]');
         const baseUrl = "https://bearbit.org/";
@@ -578,6 +579,7 @@
             btnDownload.textContent = `📥 ดาวน์โหลด (${fileSize})`;
             btnDownload.style.color = '#ffffff';
             btnDownload.style.cursor = 'pointer';
+            btnDownload.className = 'bb-download';
             btnDownload.title = 'คลิกเพื่อดาวน์โหลด';
 
             const btnImage = document.createElement('a');
@@ -597,22 +599,17 @@
 
 
             // Set background color based on file size (in GB)
-            let bgColor, suffixClass;
+            let bgColor;
             if (numericSize < 4) {
                 bgColor = '#16A34A'; // Green
-                suffixClass = 'small';
             } else if (numericSize >= 4 && numericSize <= 10 ) {
                 bgColor = '#2563EB'; // blue
-                suffixClass = 'medium';
             } else if (numericSize > 10 && numericSize <= 30) {
                 bgColor = '#EA580C'; // Orange
-                suffixClass = 'large';
             } else if (numericSize > 30) {
                 bgColor = '#DC2626'; // Red
-                suffixClass = 'xlarge';
             } else {
                 bgColor = '#16A34A'; // Grey (for unknown size)
-                suffixClass = 'small';
             }
 
             btnDownload.style.backgroundColor = bgColor;
@@ -953,10 +950,8 @@
     });
 
     function init() {
-        DownloadButton();
-        if(settings.MINIMAL){
-            minimalDetails();
-        }
+        actionsButton();
+        minimalDetails();
         autoThank();
         hideGayContents();
         createSettingsButton();
