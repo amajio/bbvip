@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BearBit Tweak [18-5-26]
 // @namespace    http://tampermonkey.net/
-// @version      18.5.26
+// @version      18.5.26.1
 // @description  BearBit Tweak
 // @author       You
 // @match       https://bearbit.org/viewno18sbx.php*
@@ -13,6 +13,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
+// @updateURL    https://github.com/amajio/bearbit-tweak/raw/refs/heads/main/bearbit.user.js
+// @downloadURL  https://github.com/amajio/bearbit-tweak/raw/refs/heads/main/bearbit.user.js
 // @connect      bearbit.org
 // ==/UserScript==
 
@@ -505,7 +507,7 @@
             const h = col.querySelector('a[href^="view"][href$=".php?sortby=1"]');
             if(h){
                 const row = h.closest('tr');
-                col.style.width = '100%';
+                //col.style.width = '100%';
                 hideColumns(row);
             }
         }
