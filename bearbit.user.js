@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         BearBit Tweak [17-5-26]
+// @name         BearBit Tweak [18-5-26]
 // @namespace    http://tampermonkey.net/
-// @version      17.5.26
+// @version      18.5.26
 // @description  BearBit Tweak
 // @author       You
 // @match       https://bearbit.org/viewno18sbx.php*
@@ -408,21 +408,6 @@
         });
     }
 
-    function hidePhotoButton(){
-        const checkForButton = setInterval(() => {
-            const button = document.getElementById('toggle-posters-btn');
-            if(button){
-                if (button.textContent == "ซ่อนรูปภาพ" && settings.MINIMAL) {
-                    clearInterval(checkForButton);
-                    button.dispatchEvent(new Event('click', { bubbles: true }));
-                    button.style.display = 'none';
-                }else if(!settings.MINIMAL){
-                    button.style.display = 'block';
-                }
-            }
-        }, 100);
-    }
-
     function removeHotTorrentSection() {
         const firstH2 = document.querySelector('h2');
         const hr = document.querySelector('hr');
@@ -526,6 +511,57 @@
         }
     }
 
+    function cleanWhitespace(row) {
+        // Walk through ALL text nodes in the entire row
+        const textNodes = [];
+        const walker = document.createTreeWalker(
+            row, // Start from the row element itself
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: function(node) {
+                    const text = node.textContent;
+                    // Accept if it's empty, only whitespace, or the word "whitespace"
+                    if(text.trim() === '' || text.trim() === 'whitespace') {
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                    return NodeFilter.FILTER_REJECT;
+                }
+            }
+        );
+
+        // Collect all whitespace text nodes
+        while(walker.nextNode()) {
+            textNodes.push(walker.currentNode);
+        }
+
+        // Remove all collected text nodes
+        textNodes.forEach(node => {
+            if(node.parentNode) {
+                node.parentNode.removeChild(node);
+            }
+        });
+
+        // Also remove any empty divs that contain ONLY whitespace
+        const emptyDivs = row.querySelectorAll('div');
+        emptyDivs.forEach(div => {
+            // Check if div has no children elements and only whitespace text
+            if(div.children.length === 0 && div.textContent.trim() === '') {
+                div.remove();
+            }
+            // Remove div that literally says "whitespace"
+            else if(div.children.length === 0 && div.textContent.trim() === 'whitespace') {
+                div.remove();
+            }
+        });
+    }
+
+    function hideDiv(row){
+        const div = row.querySelectorAll('div');
+        div.forEach(d => {
+            d.style.display = 'none';
+        });
+    }
+
     function actionsButton() {
         cleanupButtons();
         const posterRows = document.querySelectorAll('tr td[class="poster-column"]');
@@ -562,7 +598,8 @@
                 }
             }
 
-            row.querySelector(`${vipDivClass}`)?.style.setProperty('display', 'none');
+            //row.querySelector(`${vipDivClass}`)?.style.setProperty('display', 'none');
+            hideDiv(row);
             row.querySelector('img[src="pic/cams.gif "]')?.style.setProperty('display', 'none');
             const originalBookmark = row.querySelector(`${bookmarkClass}`);
             const divGroup = document.createElement('div');
@@ -619,6 +656,7 @@
             nameCell.appendChild(divGroup);
 
             removeUploaderAvartar(row);
+            cleanWhitespace(row);
 
             if (!btnDownload || btnDownload.dataset.processed === 'true') return;
 
